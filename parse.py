@@ -55,7 +55,7 @@ def whitespace():
         raise TerminalParseException("whitespace")
 
 def nullspace():
-    if currentStr[currentPos] == " " or currentStr[currentPos] == "\t":
+    if currentPos < len(currentStr) and (currentStr[currentPos] == " " or currentStr[currentPos] == "\t"):
         whitespace()
     else:
         pass
@@ -94,7 +94,7 @@ def string():
 
 def domain():
     element()
-    if currentStr[currentPos] == ".":
+    if currentPos < len(currentStr) and currentStr[currentPos] == ".":
         expect(".")
         domain()
 
@@ -123,7 +123,7 @@ def letterDigStr():
 
 def letterDig():
     try:
-        if currentStr[currentPos] in letter:
+        if currentPos < len(currentStr) and currentStr[currentPos] in letter:
             expect([letter])
         else:
             expect([digit])

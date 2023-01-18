@@ -1,0 +1,10 @@
+MAIL FROM: <jeffay@cs.unc.edu>
+MAIL FROM:<jeffay@cs.unc.edu>
+MAIL FROM: <jeffay@cs.unc.edu>
+MAIL FROM: <jeffay @cs.unc.edu>
+MAIL FROM: <jeffay@cs.unc.edu >
+
+MAIL-FROM: <jeffay@cs.unc.edu>
+MAIL FROM: < jeffay@cs.unc.edu>
+MAIL FROM: <jef fay@cs.unc.edu>
+MAIL FROM: <jeffay@ cs.unc.edu>

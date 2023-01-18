@@ -100,10 +100,13 @@ def domain():
 
 def element():
     try:
-        if lookAhead() in letter | digit:
-            name()
+        if currentPos < len(currentStr) and currentStr[currentPos] in letter:
+            if lookAhead() in letter | digit:
+                name()
+            else:
+                expect([letter])
         else:
-            expect([letter])
+            raise NonTerminalParseException()
     except NonTerminalParseException:
         raise TerminalParseException("element")
 

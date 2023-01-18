@@ -141,6 +141,7 @@ def CRLF():
 for line in stdin:
     currentStr = line
     currentPos = 0
+    print(line, end="")
     try:
         mailFromCmd()
         print("Sender ok")

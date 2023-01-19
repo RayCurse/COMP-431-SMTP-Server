@@ -1,3 +1,7 @@
+
+
+
+
 from sys import stdin
 
 currentPos = 0

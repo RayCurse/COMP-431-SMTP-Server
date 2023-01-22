@@ -35,7 +35,7 @@ digit = set("0123456789")
 special = set('<>()[]\\.,;:@"')
 char = set(map(chr, range(32, 127))) - special - SP
 
-# Grammar impl
+# MAIL_FROM command grammar impl
 def mailFromCmd():
     try:
         expect("MAIL")
@@ -144,6 +144,31 @@ def CRLF():
     except NonTerminalParseException:
         raise TerminalParseException("CRLF")
 
+# RCPT TO command grammar impl
+def rcptToCmd():
+    try:
+        expect("RCPT")
+        whitespace()
+        expect("TO:")
+        nullspace()
+        forwardPath()
+        nullspace()
+        CRLF()
+    except NonTerminalParseException:
+        raise TerminalParseException("rcpt-to-command")
+
+def forwardPath():
+    path()
+
+# DATA command grammar impl
+def dataCmd():
+    try:
+        expect("DATA")
+        nullspace()
+        CRLF()
+    except NonTerminalParseException:
+        raise TerminalParseException("data-cmd")
+
 # Main loop
 for line in stdin:
     currentStr = line
@@ -151,6 +176,6 @@ for line in stdin:
     print(line, end="")
     try:
         mailFromCmd()
-        print("Sender ok")
+        print("250 OK")
     except TerminalParseException as e:
         print(f"ERROR -- {e.TerminalName}")

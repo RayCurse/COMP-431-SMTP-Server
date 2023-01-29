@@ -3,6 +3,7 @@
 
 
 from sys import stdin
+import re
 
 currentPos = 0
 currentStr = ""
@@ -171,11 +172,27 @@ def dataCmd():
 
 # Main loop
 for line in stdin:
+
+    # Get new line
     currentStr = line
     currentPos = 0
     print(line, end="")
+
+    # Determine what command it is
+    command = None
+    if re.compile("^MAIL[ \t]+FROM:").match(line):
+        command = mailFromCmd
+    elif re.compile("^RCPT[ \t]+TO:").match(line):
+        command = rcptToCmd
+    elif re.compile("^MAIL[ \t]+FROM:").match(line):
+        command = dataCmd
+    else:
+        print("500 Syntax error: command unrecognized")
+        continue
+
+    # Parse command
     try:
-        mailFromCmd()
+        command()
         print("250 OK")
     except TerminalParseException as e:
-        print(f"ERROR -- {e.TerminalName}")
+        print("501 Syntax error in parameters or arguments")

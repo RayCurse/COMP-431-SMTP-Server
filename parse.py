@@ -68,10 +68,14 @@ def reversePath():
     path()
 
 def path():
+    global currentPath
     try:
+        pathStart = currentPos
         expect("<")
         mailbox()
         expect(">")
+        pathEnd = currentPos
+        currentPath = currentStr[pathStart:pathEnd]
     except NonTerminalParseException:
         raise TerminalParseException("path")
 
@@ -171,6 +175,12 @@ def dataCmd():
 
 # Keep track of state
 class SMTPState(Enum):
+    # Value of each state are the commands that are accepted in that state
+
+    # The value of the ProcessingData state doesn't matter since we
+    # don't treat lines as commands when in that state (and hence
+    # never get to the code that needs its value)
+
     AwaitingMailTo = {mailFromCmd}
     AwaitingRcptTo = {rcptToCmd}
     AwaitingData = {rcptToCmd, dataCmd}
@@ -178,7 +188,10 @@ class SMTPState(Enum):
 
 currentPos = 0
 currentStr = ""
+currentPath = ""
 currentState = SMTPState.AwaitingMailTo
+emailRecipients = []
+emailSender = ""
 
 def stateMachine(currentState, command):
     if currentState == SMTPState.AwaitingMailTo:
@@ -190,8 +203,6 @@ def stateMachine(currentState, command):
             return SMTPState.AwaitingData
         else:
             return SMTPState.ProcessingData
-    elif currentState == SMTPState.ProcessingData:
-        return SMTPState.AwaitingMailTo
     else:
         return SMTPState.AwaitingMailTo
 
@@ -202,6 +213,17 @@ for line in stdin:
     currentStr = line
     currentPos = 0
     print(line, end="")
+
+    # If we're processing message contents, write to file and move on to next line
+    if currentState == SMTPState.ProcessingData:
+        if line == ".\n":
+            currentState = SMTPState.AwaitingMailTo
+            print("250 OK")
+        else:
+            for email in emailRecipients:
+                with open(f"forward/{email}", "a+") as file:
+                    file.write(line)
+        continue
 
     # Determine what command it is
     command = None
@@ -218,18 +240,35 @@ for line in stdin:
 
     # Determine if command is valid under current state
     if command not in currentState.value:
-        currentState = SMTPState.AwaitingMailTo
         print("503 Bad sequence of commands")
+        currentState = SMTPState.AwaitingMailTo
         continue
-
-    # Update state
-    currentState = stateMachine(currentState, command)
 
     # Parse command
     try:
         command()
-        print("250 OK")
     except TerminalParseException as e:
         print("501 Syntax error in parameters or arguments")
         currentState = SMTPState.AwaitingMailTo
         continue
+
+    # Write response
+    if command == mailFromCmd:
+        print("250 OK")
+        emailSender = currentPath
+    elif command == rcptToCmd:
+        print("250 OK")
+        if currentState == SMTPState.AwaitingRcptTo:
+            # this is the first RCPT TO command, so clear previous email recipients
+            emailRecipients.clear()
+        emailRecipients.append(currentPath)
+    elif command == dataCmd:
+        print("354 Start mail input; end with <CRLF>.<CRLF>")
+        for email in emailRecipients:
+            with open(f"forward/{email}", "a+") as file:
+                file.write(f"From: {emailSender}\n")
+                for emailRecipient in emailRecipients:
+                    file.write(f"To: {emailRecipient}\n")
+
+    # Update state
+    currentState = stateMachine(currentState, command)

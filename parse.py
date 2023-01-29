@@ -4,11 +4,10 @@
 
 from sys import stdin
 import re
+from enum import Enum
 
-currentPos = 0
-currentStr = ""
+# Helper functions and values
 
-# Helper functions
 class TerminalParseException(Exception):
     def __init__(self, terminalName):
         self.TerminalName = terminalName
@@ -170,6 +169,32 @@ def dataCmd():
     except NonTerminalParseException:
         raise TerminalParseException("data-cmd")
 
+# Keep track of state
+class SMTPState(Enum):
+    AwaitingMailTo = {mailFromCmd}
+    AwaitingRcptTo = {rcptToCmd}
+    AwaitingData = {rcptToCmd, dataCmd}
+    ProcessingData = {}
+
+currentPos = 0
+currentStr = ""
+currentState = SMTPState.AwaitingMailTo
+
+def stateMachine(currentState, command):
+    if currentState == SMTPState.AwaitingMailTo:
+        return SMTPState.AwaitingRcptTo
+    elif currentState == SMTPState.AwaitingRcptTo:
+        return SMTPState.AwaitingData
+    elif currentState == SMTPState.AwaitingData:
+        if command == rcptToCmd:
+            return SMTPState.AwaitingData
+        else:
+            return SMTPState.ProcessingData
+    elif currentState == SMTPState.ProcessingData:
+        return SMTPState.AwaitingMailTo
+    else:
+        return SMTPState.AwaitingMailTo
+
 # Main loop
 for line in stdin:
 
@@ -184,11 +209,21 @@ for line in stdin:
         command = mailFromCmd
     elif re.compile("^RCPT[ \t]+TO:").match(line):
         command = rcptToCmd
-    elif re.compile("^MAIL[ \t]+FROM:").match(line):
+    elif re.compile("^DATA").match(line):
         command = dataCmd
     else:
         print("500 Syntax error: command unrecognized")
+        currentState = SMTPState.AwaitingMailTo
         continue
+
+    # Determine if command is valid under current state
+    if command not in currentState.value:
+        currentState = SMTPState.AwaitingMailTo
+        print("503 Bad sequence of commands")
+        continue
+
+    # Update state
+    currentState = stateMachine(currentState, command)
 
     # Parse command
     try:
@@ -196,3 +231,5 @@ for line in stdin:
         print("250 OK")
     except TerminalParseException as e:
         print("501 Syntax error in parameters or arguments")
+        currentState = SMTPState.AwaitingMailTo
+        continue

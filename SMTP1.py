@@ -275,3 +275,7 @@ for line in stdin:
 
     # Update state
     currentState = stateMachine(currentState, command)
+
+# If we were processing message when input ended, write 501 error message (invalid data command)
+if currentState == SMTPState.ProcessingData:
+    print("501 Syntax error in parameters or arguments")

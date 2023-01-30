@@ -222,7 +222,7 @@ for line in stdin:
             print("250 OK")
             for line in messageContents:
                 for email in emailRecipients:
-                    with open(f"forward/{email}", "a+") as file:
+                    with open(f"forward/{email[1:-1]}", "a+") as file:
                         file.write(line)
         else:
             messageContents.append(line)

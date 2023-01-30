@@ -192,6 +192,7 @@ currentPath = ""
 currentState = SMTPState.AwaitingMailTo
 emailRecipients = []
 emailSender = ""
+messageContents = []
 
 def stateMachine(currentState, command):
     if currentState == SMTPState.AwaitingMailTo:
@@ -219,10 +220,12 @@ for line in stdin:
         if line == ".\n":
             currentState = SMTPState.AwaitingMailTo
             print("250 OK")
+            for line in messageContents:
+                for email in emailRecipients:
+                    with open(f"forward/{email}", "a+") as file:
+                        file.write(line)
         else:
-            for email in emailRecipients:
-                with open(f"forward/{email}", "a+") as file:
-                    file.write(line)
+            messageContents.append(line)
         continue
 
     # Determine what command it is
@@ -264,11 +267,10 @@ for line in stdin:
         emailRecipients.append(currentPath)
     elif command == dataCmd:
         print("354 Start mail input; end with <CRLF>.<CRLF>")
-        for email in emailRecipients:
-            with open(f"forward/{email}", "a+") as file:
-                file.write(f"From: {emailSender}\n")
-                for emailRecipient in emailRecipients:
-                    file.write(f"To: {emailRecipient}\n")
+        messageContents.clear()
+        messageContents.append(f"From: {emailSender}\n")
+        for emailRecipient in emailRecipients:
+            messageContents.append(f"To: {emailRecipient}\n")
 
     # Update state
     currentState = stateMachine(currentState, command)

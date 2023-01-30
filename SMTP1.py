@@ -3,8 +3,9 @@
 
 
 from sys import stdin
-import re
 from enum import Enum
+import re
+import os
 
 # Helper functions and values
 
@@ -222,7 +223,7 @@ for line in stdin:
             print("250 OK")
             for line in messageContents:
                 for email in emailRecipients:
-                    with open(f"forward/{email[1:-1]}", "a+") as file:
+                    with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "forward", email[1:-1]), "a+") as file:
                         file.write(line)
         else:
             messageContents.append(line)

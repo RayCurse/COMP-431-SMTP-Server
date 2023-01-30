@@ -221,8 +221,8 @@ for line in stdin:
         if line == ".\n":
             currentState = SMTPState.AwaitingMailTo
             print("250 OK")
-            for line in messageContents:
-                for email in emailRecipients:
+            for email in emailRecipients:
+                for line in messageContents:
                     with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "forward", email[1:-1]), "a+") as file:
                         file.write(line)
         else:

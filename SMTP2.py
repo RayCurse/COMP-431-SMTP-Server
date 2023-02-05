@@ -1,4 +1,9 @@
+
+
+
+
 from sys import argv
+from sys import stderr
 from enum import Enum
 import re
 
@@ -9,10 +14,20 @@ class ForwardFilesState(Enum):
     Data = 3
 
 def getPath(s):
-    match = re.compile("<(.+)>").search(s)
+    match = re.compile("(<.+>)").search(s)
     if match == None: return None
     return match.groups(1)
 
+def sendReq(req, kwargs):
+    print(req, kwargs)
+    res = input()
+    print(res, file=stderr)
+
+    if not (res.startswith("250") or res.startswith("354")):
+        print("QUIT")
+        exit()
+
+# Parse forward file
 forwardFile = open(argv[1])
 messages = []
 currentMessage = -1
@@ -39,3 +54,13 @@ for line in forwardFile:
     elif state == ForwardFilesState.Data:
         messages[currentMessage]["data"].append(line)
 
+# Write commands to SMTP server
+for message in messages:
+    sendReq(f'MAIL FROM: {message["sender"]}')
+    for recipient in message["recipients"]:
+        sendReq(f'RCPT TO: {recipient}')
+    sendReq(f'DATA')
+    for dataLine in message["data"]:
+        sendReq(dataLine, end="")
+    sendReq(".")
+print("QUIT")

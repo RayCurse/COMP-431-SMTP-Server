@@ -5,6 +5,7 @@
 from sys import argv
 from sys import stderr
 from enum import Enum
+import os
 import re
 
 class ForwardFilesState(Enum):
@@ -16,7 +17,7 @@ class ForwardFilesState(Enum):
 def getPath(s):
     match = re.compile("(<.+>)").search(s)
     if match == None: return None
-    return match.groups(1)
+    return match.groups(0)[0]
 
 def sendReq(req, kwargs):
     print(req, kwargs)
@@ -28,6 +29,9 @@ def sendReq(req, kwargs):
         exit()
 
 # Parse forward file
+path = argv[1]
+if not os.path.isabs(path):
+    path = os.path.join(os.path.dirname(__file__), path)
 forwardFile = open(argv[1])
 messages = []
 currentMessage = -1
@@ -61,6 +65,6 @@ for message in messages:
         sendReq(f'RCPT TO: {recipient}')
     sendReq(f'DATA')
     for dataLine in message["data"]:
-        sendReq(dataLine, end="")
+        print(dataLine, end="")
     sendReq(".")
 print("QUIT")

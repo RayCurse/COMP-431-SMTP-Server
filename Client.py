@@ -1,7 +1,4 @@
 
-
-
-
 from sys import argv
 from sys import stderr
 from enum import Enum

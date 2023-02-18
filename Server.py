@@ -1,8 +1,10 @@
 
 from sys import stdin
+from sys import argv
 from enum import Enum
 import re
 import os
+import socket
 
 # Helper functions and values
 
@@ -205,73 +207,81 @@ def stateMachine(currentState, command):
     else:
         return SMTPState.AwaitingMailTo
 
-# Main loop
-for line in stdin:
+# Create listening socket and start listening for requests
+host = "127.0.0.1"
+port = int(argv[1])
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+    s.bind((host, port))
+    s.listen(1)
+    while True:
+        connSocket, addr = s.accept()
+        line = connSocket.recv(1024).decode()
+        connSocket.send(f"220 {socket.gethostname()}".encode())
 
-    # Get new line
-    currentStr = line
-    currentPos = 0
-    print(line, end="")
+        # Get new line
+        currentStr = line
+        currentPos = 0
+        print(line, end="")
 
-    # If we're processing message contents, write to file and move on to next line
-    if currentState == SMTPState.ProcessingData:
-        if line == ".\n":
-            currentState = SMTPState.AwaitingMailTo
-            print("250 OK")
-            for email in emailRecipients:
-                for line in messageContents:
-                    with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "forward", email[1:-1]), "a+") as file:
-                        file.write(line)
+        # If we're processing message contents, write to file and move on to next line
+        if currentState == SMTPState.ProcessingData:
+            if line == ".\n":
+                currentState = SMTPState.AwaitingMailTo
+                print("250 OK")
+                for email in emailRecipients:
+                    for line in messageContents:
+                        with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "forward", email[1:-1]), "a+") as file:
+                            file.write(line)
+            else:
+                messageContents.append(line)
+            continue
+
+        # Determine what command it is
+        command = None
+        if re.compile("^MAIL[ \t]+FROM:").match(line):
+            command = mailFromCmd
+        elif re.compile("^RCPT[ \t]+TO:").match(line):
+            command = rcptToCmd
+        elif re.compile("^DATA").match(line):
+            command = dataCmd
         else:
-            messageContents.append(line)
-        continue
+            print("500 Syntax error: command unrecognized")
+            currentState = SMTPState.AwaitingMailTo
+            continue
 
-    # Determine what command it is
-    command = None
-    if re.compile("^MAIL[ \t]+FROM:").match(line):
-        command = mailFromCmd
-    elif re.compile("^RCPT[ \t]+TO:").match(line):
-        command = rcptToCmd
-    elif re.compile("^DATA").match(line):
-        command = dataCmd
-    else:
-        print("500 Syntax error: command unrecognized")
-        currentState = SMTPState.AwaitingMailTo
-        continue
+        # Determine if command is valid under current state
+        if command not in currentState.value:
+            print("503 Bad sequence of commands")
+            currentState = SMTPState.AwaitingMailTo
+            continue
 
-    # Determine if command is valid under current state
-    if command not in currentState.value:
-        print("503 Bad sequence of commands")
-        currentState = SMTPState.AwaitingMailTo
-        continue
+        # Parse command
+        try:
+            command()
+        except TerminalParseException as e:
+            print("501 Syntax error in parameters or arguments")
+            currentState = SMTPState.AwaitingMailTo
+            continue
 
-    # Parse command
-    try:
-        command()
-    except TerminalParseException as e:
-        print("501 Syntax error in parameters or arguments")
-        currentState = SMTPState.AwaitingMailTo
-        continue
+        # Write response
+        if command == mailFromCmd:
+            print("250 OK")
+            emailSender = currentPath
+        elif command == rcptToCmd:
+            print("250 OK")
+            if currentState == SMTPState.AwaitingRcptTo:
+                # this is the first RCPT TO command, so clear previous email recipients
+                emailRecipients.clear()
+            emailRecipients.append(currentPath)
+        elif command == dataCmd:
+            print("354 Start mail input; end with <CRLF>.<CRLF>")
+            messageContents.clear()
+            messageContents.append(f"From: {emailSender}\n")
+            for emailRecipient in emailRecipients:
+                messageContents.append(f"To: {emailRecipient}\n")
 
-    # Write response
-    if command == mailFromCmd:
-        print("250 OK")
-        emailSender = currentPath
-    elif command == rcptToCmd:
-        print("250 OK")
-        if currentState == SMTPState.AwaitingRcptTo:
-            # this is the first RCPT TO command, so clear previous email recipients
-            emailRecipients.clear()
-        emailRecipients.append(currentPath)
-    elif command == dataCmd:
-        print("354 Start mail input; end with <CRLF>.<CRLF>")
-        messageContents.clear()
-        messageContents.append(f"From: {emailSender}\n")
-        for emailRecipient in emailRecipients:
-            messageContents.append(f"To: {emailRecipient}\n")
-
-    # Update state
-    currentState = stateMachine(currentState, command)
+        # Update state
+        currentState = stateMachine(currentState, command)
 
 # If we were processing message when input ended, write 501 error message (invalid data command)
 if currentState == SMTPState.ProcessingData:

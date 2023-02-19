@@ -1,4 +1,5 @@
 
+from sys import exit
 from sys import stdin
 from sys import argv
 from enum import Enum
@@ -227,85 +228,110 @@ def stateMachine(currentState, command):
 # Create listening socket and start listening for requests
 host = "127.0.0.1"
 port = int(argv[1])
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-    s.bind((host, port))
-    s.listen(1)
+try:
+    welcomingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    welcomingSocket.bind((host, port))
+    welcomingSocket.listen(1)
+except Exception:
+    print("error: could not create welcoming socket")
+    if welcomingSocket is not None:
+        welcomingSocket.close()
+    exit(1)
 
-    while True:
-        connSocket, addr = s.accept()
+while True:
+
+    # Wait for client connection
+    connSocket = None
+    inputFile = None
+    try:
+        connSocket, addr = welcomingSocket.accept()
         inputFile = connSocket.makefile(mode="r", encoding="utf-8")
-        with inputFile:
-            connSocket.send(f"220 {socket.gethostname()}\n".encode())
-            for line in inputFile:
+        connSocket.send(f"220 {socket.gethostname()}\n".encode())
 
-                # Get new line
-                currentStr = line
-                currentPos = 0
+        # Reset state
+        currentState = SMTPState.AwaitingHelo
 
-                # If we're processing message contents, write to file and move on to next line
-                if currentState == SMTPState.ProcessingData:
-                    if line == ".\n":
-                        currentState = SMTPState.AwaitingMailTo
-                        connSocket.send("250 OK\n".encode())
-                        for email in emailRecipients:
-                            for line in messageContents:
-                                with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "forward", email[1:-1]), "a+") as file:
-                                    file.write(line)
-                    else:
-                        messageContents.append(line)
-                    continue
+        # Process commands
+        for line in inputFile:
 
-                # Determine what command it is
-                command = None
-                if re.compile("^MAIL[ \t]+FROM:").match(line):
-                    command = mailFromCmd
-                elif re.compile("^RCPT[ \t]+TO:").match(line):
-                    command = rcptToCmd
-                elif re.compile("^DATA").match(line):
-                    command = dataCmd
-                elif re.compile("^HELO").match(line):
-                    command = heloCmd
-                else:
-                    connSocket.send("500 Syntax error: command unrecognized\n".encode())
-                    currentState = SMTPState.AwaitingMailTo
-                    continue
+            # Get new line
+            currentStr = line
+            currentPos = 0
 
-                # Determine if command is valid under current state
-                if command not in currentState.value:
-                    connSocket.send("503 Bad sequence of commands\n".encode())
-                    currentState = SMTPState.AwaitingMailTo
-                    continue
-
-                # Parse command
-                try:
-                    command()
-                except TerminalParseException as e:
-                    connSocket.send("501 Syntax error in parameters or arguments\n".encode())
-                    currentState = SMTPState.AwaitingMailTo
-                    continue
-
-                # Write response
-                if command == mailFromCmd:
-                    connSocket.send("250 OK\n".encode())
-                    emailSender = currentPath
-                elif command == rcptToCmd:
-                    connSocket.send("250 OK\n".encode())
-                    if currentState == SMTPState.AwaitingRcptTo:
-                        # this is the first RCPT TO command, so clear previous email recipients
-                        emailRecipients.clear()
-                    emailRecipients.append(currentPath)
-                elif command == dataCmd:
-                    connSocket.send("354 Start mail input; end with <CRLF>.<CRLF>\n".encode())
-                    messageContents.clear()
-                    messageContents.append(f"From: {emailSender}\n")
-                    for emailRecipient in emailRecipients:
-                        messageContents.append(f"To: {emailRecipient}\n")
-                elif command == heloCmd:
-                    connSocket.send(f"250 Hello {currentDomain} pleased to meet you\n".encode())
-
-                # Update state
-                currentState = stateMachine(currentState, command)
-
-            # If we were processing message when input ended, write 501 error message (invalid data command)
+            # If we're processing message contents, write to file and move on to next line
             if currentState == SMTPState.ProcessingData:
-                connSocket.send("501 Syntax error in parameters or arguments".encode())
+                if line == ".\n":
+                    currentState = SMTPState.AwaitingMailTo
+                    connSocket.send("250 OK\n".encode())
+                    for email in emailRecipients:
+                        for line in messageContents:
+                            with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "forward", email[1:-1]), "a+") as file:
+                                file.write(line)
+                else:
+                    messageContents.append(line)
+                continue
+
+            # Determine what command it is
+            command = None
+            if re.compile("^MAIL[ \t]+FROM:").match(line):
+                command = mailFromCmd
+            elif re.compile("^RCPT[ \t]+TO:").match(line):
+                command = rcptToCmd
+            elif re.compile("^DATA").match(line):
+                command = dataCmd
+            elif re.compile("^HELO").match(line):
+                command = heloCmd
+            else:
+                connSocket.send("500 Syntax error: command unrecognized\n".encode())
+                currentState = SMTPState.AwaitingMailTo
+                continue
+
+            # Determine if command is valid under current state
+            if command not in currentState.value:
+                connSocket.send("503 Bad sequence of commands\n".encode())
+                currentState = SMTPState.AwaitingMailTo
+                continue
+
+            # Parse command
+            try:
+                command()
+            except TerminalParseException as e:
+                connSocket.send("501 Syntax error in parameters or arguments\n".encode())
+                currentState = SMTPState.AwaitingMailTo
+                continue
+
+            # Write response
+            if command == mailFromCmd:
+                connSocket.send("250 OK\n".encode())
+                emailSender = currentPath
+            elif command == rcptToCmd:
+                connSocket.send("250 OK\n".encode())
+                if currentState == SMTPState.AwaitingRcptTo:
+                    # this is the first RCPT TO command, so clear previous email recipients
+                    emailRecipients.clear()
+                emailRecipients.append(currentPath)
+            elif command == dataCmd:
+                connSocket.send("354 Start mail input; end with <CRLF>.<CRLF>\n".encode())
+                messageContents.clear()
+                messageContents.append(f"From: {emailSender}\n")
+                for emailRecipient in emailRecipients:
+                    messageContents.append(f"To: {emailRecipient}\n")
+            elif command == heloCmd:
+                connSocket.send(f"250 Hello {currentDomain} pleased to meet you\n".encode())
+
+            # Update state
+            currentState = stateMachine(currentState, command)
+
+        # If we were processing message when input ended, write 501 error message (invalid data command)
+        if currentState == SMTPState.ProcessingData:
+            connSocket.send("501 Syntax error in parameters or arguments".encode())
+    except Exception:
+        print("error: client connection error")
+    except KeyboardInterrupt:
+        welcomingSocket.close()
+        exit(0)
+    finally:
+        if inputFile is not None:
+            inputFile.close()
+        if connSocket is not None:
+            connSocket.close()

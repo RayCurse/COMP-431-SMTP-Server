@@ -1,4 +1,7 @@
 
+
+
+
 from sys import stdin
 from sys import argv
 from enum import Enum
@@ -175,7 +178,6 @@ def dataCmd():
 
 # HELO command grammar impl
 def heloCmd():
-    global currentDomain
     try:
         expect("HELO")
         whitespace()
@@ -206,7 +208,7 @@ currentPos = 0
 currentStr = ""
 currentPath = ""
 currentDomain = ""
-currentState = SMTPState.AwaitingHelo
+currentState = SMTPState.AwaitingMailTo
 emailRecipients = []
 emailSender = ""
 messageContents = []
@@ -233,20 +235,21 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 
     while True:
         connSocket, addr = s.accept()
-        inputFile = connSocket.makefile(mode="r", encoding="utf-8")
-        with inputFile:
+        with connSocket:
             connSocket.send(f"220 {socket.gethostname()}\n".encode())
-            for line in inputFile:
+            while True:
+                line = connSocket.recv(1024).decode()
 
                 # Get new line
                 currentStr = line
                 currentPos = 0
+                print(line, end="")
 
                 # If we're processing message contents, write to file and move on to next line
                 if currentState == SMTPState.ProcessingData:
                     if line == ".\n":
                         currentState = SMTPState.AwaitingMailTo
-                        connSocket.send("250 OK\n".encode())
+                        print("250 OK")
                         for email in emailRecipients:
                             for line in messageContents:
                                 with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "forward", email[1:-1]), "a+") as file:
@@ -266,13 +269,13 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 elif re.compile("^HELO").match(line):
                     command = heloCmd
                 else:
-                    connSocket.send("500 Syntax error: command unrecognized\n".encode())
+                    print("500 Syntax error: command unrecognized")
                     currentState = SMTPState.AwaitingMailTo
                     continue
 
                 # Determine if command is valid under current state
                 if command not in currentState.value:
-                    connSocket.send("503 Bad sequence of commands\n".encode())
+                    print("503 Bad sequence of commands")
                     currentState = SMTPState.AwaitingMailTo
                     continue
 
@@ -280,32 +283,32 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 try:
                     command()
                 except TerminalParseException as e:
-                    connSocket.send("501 Syntax error in parameters or arguments\n".encode())
+                    print("501 Syntax error in parameters or arguments")
                     currentState = SMTPState.AwaitingMailTo
                     continue
 
                 # Write response
                 if command == mailFromCmd:
-                    connSocket.send("250 OK\n".encode())
+                    print("250 OK")
                     emailSender = currentPath
                 elif command == rcptToCmd:
-                    connSocket.send("250 OK\n".encode())
+                    print("250 OK")
                     if currentState == SMTPState.AwaitingRcptTo:
                         # this is the first RCPT TO command, so clear previous email recipients
                         emailRecipients.clear()
                     emailRecipients.append(currentPath)
                 elif command == dataCmd:
-                    connSocket.send("354 Start mail input; end with <CRLF>.<CRLF>\n".encode())
+                    print("354 Start mail input; end with <CRLF>.<CRLF>")
                     messageContents.clear()
                     messageContents.append(f"From: {emailSender}\n")
                     for emailRecipient in emailRecipients:
                         messageContents.append(f"To: {emailRecipient}\n")
                 elif command == heloCmd:
-                    connSocket.send(f"250 Hello {currentDomain} pleased to meet you\n".encode())
+                    print(f"250 Hello {} pleased to meet you")
 
                 # Update state
                 currentState = stateMachine(currentState, command)
 
-            # If we were processing message when input ended, write 501 error message (invalid data command)
-            if currentState == SMTPState.ProcessingData:
-                connSocket.send("501 Syntax error in parameters or arguments".encode())
+# If we were processing message when input ended, write 501 error message (invalid data command)
+if currentState == SMTPState.ProcessingData:
+    print("501 Syntax error in parameters or arguments")

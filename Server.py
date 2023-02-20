@@ -253,7 +253,7 @@ while True:
 
         # Process commands
         for line in inputFile:
-
+            print(line, end="")
             # Get new line
             currentStr = line
             currentPos = 0

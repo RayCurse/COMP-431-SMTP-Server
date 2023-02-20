@@ -60,6 +60,13 @@ try:
         assertSMTPResponseCode(inputFile.readline(), 250)
     clientSocket.send(f"DATA\n".encode())
     assertSMTPResponseCode(inputFile.readline(), 354)
+    clientSocket.send(f"From: <{sender}>\n".encode())
+    clientSocket.send(f"To: ".encode())
+    for i, recipient in enumerate(recipients):
+        clientSocket.send(f"<{recipient}>".encode())
+        if i < len(recipients) - 1:
+            clientSocket.send(", ".encode())
+    clientSocket.send(f"\nSubject: {subject}\n\n".encode())
     for dataLine in data:
         clientSocket.send(dataLine.encode())
     clientSocket.send(".\n".encode())

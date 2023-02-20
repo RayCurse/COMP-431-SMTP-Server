@@ -228,6 +228,7 @@ def stateMachine(currentState, command):
 # Create listening socket and start listening for requests
 host = "127.0.0.1"
 port = int(argv[1])
+welcomingSocket = None
 try:
     welcomingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     welcomingSocket.bind((host, port))
@@ -257,6 +258,10 @@ while True:
             # Get new line
             currentStr = line
             currentPos = 0
+
+            # Special case for QUIT command
+            if line == "QUIT\n":
+                break
 
             # If we're processing message contents, write to file and move on to next line
             if currentState == SMTPState.ProcessingData:

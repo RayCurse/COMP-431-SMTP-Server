@@ -225,12 +225,11 @@ def stateMachine(currentState, command):
         return SMTPState.AwaitingMailTo
 
 # Create listening socket and start listening for requests
-host = "127.0.0.1"
 port = int(argv[1])
 welcomingSocket = None
 try:
     welcomingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    welcomingSocket.bind((host, port))
+    welcomingSocket.bind(("", port))
     welcomingSocket.listen(1)
 except Exception:
     print("error: could not create welcoming socket")
@@ -253,7 +252,6 @@ while True:
 
         # Process commands
         for line in inputFile:
-            print(line, end="")
             # Get new line
             currentStr = line
             currentPos = 0

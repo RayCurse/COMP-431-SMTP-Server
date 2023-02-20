@@ -1,67 +1,45 @@
 
-from sys import argv
-from sys import stderr
-from enum import Enum
-import os
+import sys
 import re
 
-class ForwardFilesState(Enum):
-    Sender = 0
-    FirstRecipient = 1
-    Recipient = 2
-    Data = 3
+# Helper functions
+def isPath(s):
+    localPartRegularExpr = r'((?![<>()[\]\\.,:;@"\s\t])[ -~])+'
+    domainRegularExpr = r'([a-zA-Z][a-zA-Z0-9]*\.)*[a-zA-Z][a-zA-Z0-9]*'
+    pathRegularExpr = localPartRegularExpr + "@" + domainRegularExpr
+    return re.fullmatch(pathRegularExpr, s) is not None
 
-def getPath(s):
-    match = re.compile("(<.+>)").search(s)
-    if match == None: return None
-    return match.groups(0)[0]
+def getPaths(s):
+    paths = re.split(r",[\s]?", s)
+    for path in paths:
+        if not isPath(path): return None
+    return paths
 
-def sendReq(req, kwargs):
-    print(req, kwargs)
-    res = input()
-    print(res, file=stderr)
+# Get user input
+sender = input("From:\n")
+while not isPath(sender):
+    print("invalid sender")
+    sender = input("From:\n")
 
-    if not (res.startswith("250") or res.startswith("354")):
-        print("QUIT")
-        exit()
+recipients = getPaths(input("To:\n"))
+while recipients is None:
+    print("invalid list of recipients")
+    recipients = getPaths(input("To:\n"))
 
-# Parse forward file
-path = argv[1]
-if not os.path.isabs(path):
-    path = os.path.join(os.path.dirname(__file__), path)
-forwardFile = open(argv[1])
-messages = []
-currentMessage = -1
-state = ForwardFilesState.Sender
-
-for line in forwardFile:
-    if line.startswith("From:"):
-        state = ForwardFilesState.Sender
-    if state == ForwardFilesState.Sender:
-        currentMessage += 1
-        messages.append({
-            "sender" : getPath(line),
-            "recipients" : [],
-            "data" : []
-        })
-        state = ForwardFilesState.Recipient
-    elif state == ForwardFilesState.Recipient:
-        recipient = getPath(line)
-        if recipient:
-            messages[currentMessage]["recipients"].append(recipient)
-        else:
-            state = ForwardFilesState.Data
-            messages[currentMessage]["data"].append(line)
-    elif state == ForwardFilesState.Data:
-        messages[currentMessage]["data"].append(line)
+subject = input("Subject:\n")
+print("Message:")
+data = []
+while True:
+    line = sys.stdin.readline()
+    if line == ".\n": break
+    data.append(line)
 
 # Write commands to SMTP server
-for message in messages:
-    sendReq(f'MAIL FROM: {message["sender"]}')
-    for recipient in message["recipients"]:
-        sendReq(f'RCPT TO: {recipient}')
-    sendReq(f'DATA')
-    for dataLine in message["data"]:
-        print(dataLine, end="")
-    sendReq(".")
+print(f'MAIL FROM: <{sender}>')
+for recipient in recipients:
+    print(f'RCPT TO: <{recipient}>')
+print(f'DATA')
+for dataLine in data:
+    print(dataLine, end="")
+print(".")
 print("QUIT")

@@ -8,7 +8,6 @@ import os
 import socket
 
 # Helper functions and values
-
 class TerminalParseException(Exception):
     def __init__(self, terminalName):
         self.TerminalName = terminalName

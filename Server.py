@@ -263,11 +263,11 @@ while True:
                     connSocket.send("250 OK\n".encode())
                     domains = set()
                     for email in emailRecipients:
-                        domain = email.partition("@")[2][:-1]
-                        if domain in domains: continue
-                        domains.add(domain)
+                        domainStr = email.partition("@")[2][:-1]
+                        if domainStr in domains: continue
+                        domains.add(domainStr)
                         for line in messageContents:
-                            with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "forward", domain), "a+") as file:
+                            with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "forward", domainStr), "a+") as file:
                                 file.write(line)
                 else:
                     messageContents.append(line)

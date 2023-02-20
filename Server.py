@@ -259,22 +259,27 @@ while True:
             currentStr = line
             currentPos = 0
 
-            # Special case for QUIT command
-            if line == "QUIT\n":
-                break
-
             # If we're processing message contents, write to file and move on to next line
             if currentState == SMTPState.ProcessingData:
                 if line == ".\n":
                     currentState = SMTPState.AwaitingMailTo
                     connSocket.send("250 OK\n".encode())
+                    domains = set()
                     for email in emailRecipients:
+                        domain = email.partition("@")[2][:-1]
+                        if domain in domains: continue
+                        domains.add(domain)
                         for line in messageContents:
-                            with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "forward", email[1:-1]), "a+") as file:
+                            with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "forward", domain), "a+") as file:
                                 file.write(line)
                 else:
                     messageContents.append(line)
                 continue
+
+            # Special case for QUIT command
+            if line == "QUIT\n":
+                connSocket.send(f"221 {socket.gethostname()} closing connection\n".encode())
+                break
 
             # Determine what command it is
             command = None
@@ -318,9 +323,10 @@ while True:
             elif command == dataCmd:
                 connSocket.send("354 Start mail input; end with <CRLF>.<CRLF>\n".encode())
                 messageContents.clear()
-                messageContents.append(f"From: {emailSender}\n")
-                for emailRecipient in emailRecipients:
-                    messageContents.append(f"To: {emailRecipient}\n")
+                # The from and to headers should now be sent from the client as message contents
+                # messageContents.append(f"From: {emailSender}\n")
+                # for emailRecipient in emailRecipients:
+                #     messageContents.append(f"To: {emailRecipient}\n")
             elif command == heloCmd:
                 connSocket.send(f"250 Hello {currentDomain} pleased to meet you\n".encode())
 

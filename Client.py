@@ -16,6 +16,12 @@ def getPaths(s):
         if not isPath(path): return None
     return paths
 
+class SMTPException(Exception):
+    pass
+def assertSMTPResponseCode(response, code):
+    if not response.startswith(str(code)):
+        raise SMTPException
+
 # Get user input
 sender = input("From:\n")
 while not isPath(sender):
@@ -39,20 +45,38 @@ while True:
 serverName = sys.argv[1]
 port = int(sys.argv[2])
 clientSocket = None
+inputFile = None
 try:
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    inputFile = clientSocket.makefile(mode="r", encoding="utf-8")
     clientSocket.connect((serverName, port))
+    assertSMTPResponseCode(inputFile.readline(), 220)
+    clientSocket.send(f"HELO {socket.gethostname()}\n".encode())
+    assertSMTPResponseCode(inputFile.readline(), 250)
     clientSocket.send(f"MAIL FROM: <{sender}>\n".encode())
+    assertSMTPResponseCode(inputFile.readline(), 250)
     for recipient in recipients:
         clientSocket.send(f"RCPT TO: <{recipient}>\n".encode())
+        assertSMTPResponseCode(inputFile.readline(), 250)
     clientSocket.send(f"DATA\n".encode())
+    assertSMTPResponseCode(inputFile.readline(), 354)
     for dataLine in data:
         clientSocket.send(dataLine.encode())
     clientSocket.send(".\n".encode())
+    assertSMTPResponseCode(inputFile.readline(), 250)
     clientSocket.send("QUIT\n".encode())
+    assertSMTPResponseCode(inputFile.readline(), 221)
 except socket.error:
     print("error: could not connect to server")
     sys.exit(1)
+except SMTPException:
+    print("error: SMTP protocol error")
+    sys.exit(1)
+except Exception:
+    print("error: unexpected error")
+    sys.exit(1)
 finally:
+    if inputFile is not None:
+        inputFile.close()
     if clientSocket is not None:
         clientSocket.close()

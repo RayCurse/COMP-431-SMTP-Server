@@ -1,4 +1,5 @@
 
+import socket
 import sys
 import re
 
@@ -35,11 +36,23 @@ while True:
     data.append(line)
 
 # Write commands to SMTP server
-print(f'MAIL FROM: <{sender}>')
-for recipient in recipients:
-    print(f'RCPT TO: <{recipient}>')
-print(f'DATA')
-for dataLine in data:
-    print(dataLine, end="")
-print(".")
-print("QUIT")
+serverName = sys.argv[1]
+port = int(sys.argv[2])
+clientSocket = None
+try:
+    clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    clientSocket.connect((serverName, port))
+    clientSocket.send(f"MAIL FROM: <{sender}>\n".encode())
+    for recipient in recipients:
+        clientSocket.send(f"RCPT TO: <{recipient}>\n".encode())
+    clientSocket.send(f"DATA\n".encode())
+    for dataLine in data:
+        clientSocket.send(dataLine.encode())
+    clientSocket.send(".\n".encode())
+    clientSocket.send("QUIT\n".encode())
+except socket.error:
+    print("error: could not connect to server")
+    sys.exit(1)
+finally:
+    if clientSocket is not None:
+        clientSocket.close()

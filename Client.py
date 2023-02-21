@@ -17,10 +17,12 @@ def getPaths(s):
     return paths
 
 class SMTPException(Exception):
+    def __init__(self, code):
+        self.code = code
     pass
 def assertSMTPResponseCode(response, code):
     if not response.startswith(str(code)):
-        raise SMTPException
+        raise SMTPException(response[:3])
 
 # Get user input
 sender = input("From:\n")
@@ -76,8 +78,8 @@ try:
 except socket.error:
     print("error: could not connect to server")
     sys.exit(1)
-except SMTPException:
-    print("error: SMTP protocol error")
+except SMTPException as e:
+    print(f"error: SMTP protocol error {e.code}")
     sys.exit(1)
 except Exception:
     print("error: unexpected error")

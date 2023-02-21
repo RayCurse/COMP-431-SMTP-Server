@@ -229,6 +229,7 @@ port = int(argv[1])
 welcomingSocket = None
 try:
     welcomingSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    welcomingSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     welcomingSocket.bind(("", port))
     welcomingSocket.listen(1)
 except Exception:
